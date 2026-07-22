@@ -1,31 +1,26 @@
 # LangChain Agents
 
-Small, practical agent examples built with [LangChain Deep Agents](https://docs.langchain.com/oss/javascript/deepagents/overview).
+Practical agents built with [LangChain Deep Agents](https://docs.langchain.com/oss/python/deepagents/overview)
+and the Managed Deep Agents (MDA) platform (private beta).
 
-## Example
+## Agents
 
-[`example/agent.ts`](./example/agent.ts) creates a simple research agent using Deep Agents and Claude.
+Each root-level folder containing an `agent.py` (or `agent.ts`) is an
+independent, self-contained agent project.
 
-## Run it
+- [`software-delivery-agent/`](./software-delivery-agent/) — Python MDA
+  project: scheduled Sentry-to-Jira production triage, human-approved bug
+  fixing in an isolated sandbox with draft PRs. Jira/Confluence, Slack,
+  Sentry, and the LangChain docs are remote MCP connectors; GitHub stays on
+  the `gh` CLI inside the sandbox.
 
-```bash
-npm install deepagents langchain @langchain/core
-export ANTHROPIC_API_KEY="your-key"
-npx tsx example/agent.ts
-```
+## Deploy automation
 
-## Managed example
-
-[`examples/software-delivery-agent/`](./examples/software-delivery-agent/) is a
-self-contained Managed Deep Agents project: scheduled Sentry triage into Jira,
-human-approved bug fixing in an isolated sandbox with draft PRs, plus Slack,
-Confluence, and the LangChain docs MCP. Each folder under `examples/` is an
-independent agent; `scripts/deploy-changed-agents.sh` deploys only the ones a
-commit touched.
-
-## Platform
-
-Deep Agents adds planning, filesystem context, subagents, memory, and human-in-the-loop support to LangChain agents.
+`scripts/deploy-changed-agents.sh` discovers root-level agent folders and
+deploys only the ones a commit touched. CI
+(`.github/workflows/deploy-agents.yml`) lints, tests, and compiles each
+changed agent; deployment stays disabled unless the repository variable
+`MDA_DEPLOY_ENABLED=true` is set.
 
 ## Series
 

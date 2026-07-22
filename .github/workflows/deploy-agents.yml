@@ -20,18 +20,26 @@ jobs:
     outputs:
       agents: ${{ steps.detect.outputs.agents }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
       - name: Detect changed agents
         id: detect
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.all }}" = "true" ]; then
-            list="$(scripts/deploy-changed-agents.sh --list --all)"
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.all }}" == "true" ]]; then
+              list="$(scripts/deploy-changed-agents.sh --list --all)"
+            else
+              list="$(scripts/deploy-changed-agents.sh --list \
+                --base "${{ github.sha }}^" \
+                --head "${{ github.sha }}")"
+            fi
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
             list="$(scripts/deploy-changed-agents.sh --list \
               --base "${{ github.event.pull_request.base.sha }}" \
               --head "${{ github.event.pull_request.head.sha }}")"
+          elif [[ "${{ github.event.before }}" =~ ^0+$ ]]; then
+            list="$(scripts/deploy-changed-agents.sh --list --all)"
           else
             list="$(scripts/deploy-changed-agents.sh --list \
               --base "${{ github.event.before }}" \
@@ -52,21 +60,25 @@ jobs:
       run:
         working-directory: ${{ matrix.agent }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: ${{ matrix.agent }}/package-lock.json
-      - run: npm ci
-      - run: npm run typecheck --if-present
-      - run: npm test --if-present
+          version: "0.11.29"
+      - name: Install locked dependencies
+        run: uv sync --frozen
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Test
+        run: uv run pytest
+      - name: Compile managed app (no deploy)
+        run: uv run mda build .
 
   deploy:
     needs: [changes, check]
-    # Deploys only when explicitly enabled for the repository and only from main
-    # (push or manual dispatch) — never on pull requests. A new repository has
-    # no MDA_DEPLOY_ENABLED variable, so publishing an example cannot deploy it.
+    # Deployment is opt-in and never runs on pull requests. A new repository
+    # has no MDA_DEPLOY_ENABLED variable, so publishing this cannot deploy it.
     if: >-
       needs.changes.outputs.agents != '[]' &&
       vars.MDA_DEPLOY_ENABLED == 'true' &&
@@ -75,17 +87,25 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          node-version: 22
+          version: "0.11.29"
       - name: Deploy changed agents
         env:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.all }}" = "true" ]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.all }}" == "true" ]]; then
+              scripts/deploy-changed-agents.sh --all
+            else
+              scripts/deploy-changed-agents.sh \
+                --base "${{ github.sha }}^" \
+                --head "${{ github.sha }}"
+            fi
+          elif [[ "${{ github.event.before }}" =~ ^0+$ ]]; then
             scripts/deploy-changed-agents.sh --all
           else
             scripts/deploy-changed-agents.sh \
