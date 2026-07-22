@@ -1,0 +1,92 @@
+name: Agents CI and deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      all:
+        description: Deploy every agent regardless of changes
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      agents: ${{ steps.detect.outputs.agents }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect changed agents
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.all }}" = "true" ]; then
+            list="$(scripts/deploy-changed-agents.sh --list --all)"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            list="$(scripts/deploy-changed-agents.sh --list \
+              --base "${{ github.event.pull_request.base.sha }}" \
+              --head "${{ github.event.pull_request.head.sha }}")"
+          else
+            list="$(scripts/deploy-changed-agents.sh --list \
+              --base "${{ github.event.before }}" \
+              --head "${{ github.sha }}")"
+          fi
+          echo "Changed agents:"; echo "$list"
+          echo "agents=$(echo "$list" | jq -Rcn '[inputs | select(length > 0)]')" >> "$GITHUB_OUTPUT"
+
+  check:
+    needs: changes
+    if: needs.changes.outputs.agents != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: ${{ fromJSON(needs.changes.outputs.agents) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.agent }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.agent }}/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck --if-present
+      - run: npm test --if-present
+
+  deploy:
+    needs: [changes, check]
+    # Deploys only from main (push or manual dispatch) — never on pull requests,
+    # so forks and PRs can never reach the deploy credentials.
+    if: >-
+      needs.changes.outputs.agents != '[]' &&
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Deploy changed agents
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.all }}" = "true" ]; then
+            scripts/deploy-changed-agents.sh --all
+          else
+            scripts/deploy-changed-agents.sh \
+              --base "${{ github.event.before }}" \
+              --head "${{ github.sha }}"
+          fi

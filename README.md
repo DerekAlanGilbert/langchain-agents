@@ -14,6 +14,15 @@ export ANTHROPIC_API_KEY="your-key"
 npx tsx example/agent.ts
 ```
 
+## Managed example
+
+[`examples/software-delivery-agent/`](./examples/software-delivery-agent/) is a
+self-contained Managed Deep Agents project: scheduled Sentry triage into Jira,
+human-approved bug fixing in an isolated sandbox with draft PRs, plus Slack,
+Confluence, and the LangChain docs MCP. Each folder under `examples/` is an
+independent agent; `scripts/deploy-changed-agents.sh` deploys only the ones a
+commit touched.
+
 ## Platform
 
 Deep Agents adds planning, filesystem context, subagents, memory, and human-in-the-loop support to LangChain agents.
