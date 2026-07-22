@@ -64,10 +64,12 @@ jobs:
 
   deploy:
     needs: [changes, check]
-    # Deploys only from main (push or manual dispatch) — never on pull requests,
-    # so forks and PRs can never reach the deploy credentials.
+    # Deploys only when explicitly enabled for the repository and only from main
+    # (push or manual dispatch) — never on pull requests. A new repository has
+    # no MDA_DEPLOY_ENABLED variable, so publishing an example cannot deploy it.
     if: >-
       needs.changes.outputs.agents != '[]' &&
+      vars.MDA_DEPLOY_ENABLED == 'true' &&
       github.event_name != 'pull_request' &&
       github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

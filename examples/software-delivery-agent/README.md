@@ -129,9 +129,11 @@ mda deploy examples/software-delivery-agent
 ```
 
 CI (`.github/workflows/deploy-agents.yml`) runs each changed agent's own
-install/typecheck/tests on every PR, and deploys changed agents from `main`
-via `scripts/deploy-changed-agents.sh`. Deploy secrets are confined to the
-`production` environment and never exposed to pull requests.
+install/typecheck/tests on every PR. Deployment is disabled by default and
+requires the repository variable `MDA_DEPLOY_ENABLED=true`; only then can a
+`main` run deploy changed agents through `scripts/deploy-changed-agents.sh`.
+Deploy secrets are confined to the `production` environment and never exposed
+to pull requests.
 
 ## Notes on the MCP connector
 
